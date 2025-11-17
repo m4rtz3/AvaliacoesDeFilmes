@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>🎬 Avaliação de Filmes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+    <div class="container py-5">
+        <h1 class="mb-4 text-center">Avaliação de Filmes</h1>
+
+        <!-- Formulário para adicionar filme -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Adicionar novo filme</h5>
+                <div class="input-group">
+                    <input type="text" id="novoFilme" class="form-control" placeholder="Nome do filme">
+                    <button class="btn btn-primary" onclick="adicionarFilme()">Adicionar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de filmes -->
+        <div id="listaFilmes" class="row g-3"></div>
+    </div>
+
+    <!-- Modal de avaliações -->
+    <div class="modal fade" id="avaliacoesModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 id="modalTitulo" class="modal-title">Avaliações</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="mediaAvaliacao" class="alert alert-info mb-3" style="display:none;">
+                        <strong>Média das avaliações:</strong> <span id="mediaValor">0</span>/10
+                    </div>
+                    
+                    <ul id="listaAvaliacoes" class="list-group mb-3"></ul>
+
+                    <h6>Nova avaliação</h6>
+                    <input type="text" id="usuario" class="form-control mb-2" placeholder="Seu nome">
+                    <input type="number" id="nota" class="form-control mb-2" placeholder="Nota (0 a 10)" min="0" max="10">
+                    <button class="btn btn-success w-100" onclick="enviarAvaliacao()">Enviar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let filmes = [];
+        let filmeAtual = null;
+        let modalInstance = null;
+
+        // ----- Função para carregar filmes -----
+        async function carregarFilmes() {
+            try {
+                const resp = await fetch('/filmes');
+                filmes = await resp.json();
+                renderizarFilmes();
+            } catch (err) {
+                alert('Erro ao carregar filmes: ' + err.message);
+            }
+        }
+
+        // ----- Renderizar lista de filmes -----
+        function renderizarFilmes() {
+            const container = document.getElementById('listaFilmes');
+            
+            if (filmes.length === 0) {
+                container.innerHTML = '<div class="col-12"><p class="text-center text-muted">Nenhum filme cadastrado ainda.</p></div>';
+                return;
+            }
+
+            container.innerHTML = filmes.map(filme => `
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">${filme.nome}</h5>
+                            <p class="text-muted small">ID: ${filme.id}</p>
+                            <button class="btn btn-info btn-sm w-100" onclick="verAvaliacoes('${filme.id}', '${filme.nome}')">
+                                Ver Avaliações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ----- Função para adicionar filme -----
+        async function adicionarFilme() {
+            const nome = document.getElementById("novoFilme").value.trim();
+            
+            if (!nome) {
+                alert("Digite o nome do filme!");
+                return;
+            }
+
+            try {
+                const resp = await fetch('/filmes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nome })
+                });
+
+                if (resp.ok) {
+                    document.getElementById("novoFilme").value = '';
+                    await carregarFilmes();
+                    alert('Filme adicionado com sucesso!');
+                } else {
+                    const erro = await resp.json();
+                    alert('Erro ao adicionar filme: ' + erro.erro);
+                }
+            } catch (err) {
+                alert('Erro ao adicionar filme: ' + err.message);
+            }
+        }
+
+        // ----- Função para ver avaliações -----
+        async function verAvaliacoes(id, nome) {
+            filmeAtual = id;
+            document.getElementById('modalTitulo').textContent = `Avaliações: ${nome}`;
+            
+            try {
+                const resp = await fetch(`/avaliacoes/${id}`);
+                const avaliacoes = await resp.json();
+                
+                renderizarAvaliacoes(avaliacoes);
+                
+                // Abrir modal
+                if (!modalInstance) {
+                    modalInstance = new bootstrap.Modal(document.getElementById('avaliacoesModal'));
+                }
+                modalInstance.show();
+            } catch (err) {
+                alert('Erro ao carregar avaliações: ' + err.message);
+            }
+        }
+
+        // ----- Renderizar avaliações -----
+        function renderizarAvaliacoes(avaliacoes) {
+            const lista = document.getElementById('listaAvaliacoes');
+            const divMedia = document.getElementById('mediaAvaliacao');
+            const spanMedia = document.getElementById('mediaValor');
+            
+            if (avaliacoes.length === 0) {
+                lista.innerHTML = '<li class="list-group-item text-muted">Nenhuma avaliação ainda. Seja o primeiro!</li>';
+                divMedia.style.display = 'none';
+                return;
+            }
+
+            // Calcular média
+            const soma = avaliacoes.reduce((acc, av) => acc + av.nota, 0);
+            const media = (soma / avaliacoes.length).toFixed(1);
+            spanMedia.textContent = media;
+            divMedia.style.display = 'block';
+
+            // Renderizar lista
+            lista.innerHTML = avaliacoes.map(av => {
+                const data = new Date(av.data);
+                const dataFormatada = data.toLocaleDateString('pt-BR') + ' ' + data.toLocaleTimeString('pt-BR');
+                
+                return `
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${av.usuario}</strong>
+                                <br>
+                                <small class="text-muted">${dataFormatada}</small>
+                            </div>
+                            <span class="badge bg-primary rounded-pill">${av.nota}/10</span>
+                        </div>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        // ----- Função para enviar avaliação -----
+        // ----- Função para enviar avaliação -----
+async function enviarAvaliacao() {
+    const usuario = document.getElementById("usuario").value.trim();
+    const notaInput = document.getElementById("nota").value;
+
+    if (!usuario) {
+        alert("Digite seu nome!");
+        return;
+    }
+
+    if (!notaInput || notaInput === '') {
+        alert("Digite uma nota!");
+        return;
+    }
+
+    const nota = parseInt(notaInput);
+
+    if (isNaN(nota) || nota < 0 || nota > 10) {
+        alert("Digite uma nota válida entre 0 e 10!");
+        return;
+    }
+
+    if (!filmeAtual) {
+        alert("Erro: Nenhum filme selecionado!");
+        return;
+    }
+
+    // Log para debug
+    console.log('Enviando avaliação:', { 
+        id_filme: filmeAtual, 
+        usuario, 
+        nota,
+        tipo_id: typeof filmeAtual,
+        tipo_nota: typeof nota
+    });
+
+    try {
+        const resp = await fetch('/avaliacoes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                id_filme: filmeAtual, 
+                usuario, 
+                nota 
+            })
+        });
+
+        const resultado = await resp.json();
+
+        if (resp.ok) {
+            document.getElementById("usuario").value = '';
+            document.getElementById("nota").value = '';
+            
+            const nomeFilme = filmes.find(f => f.id === filmeAtual)?.nome || 'Filme';
+            await verAvaliacoes(filmeAtual, nomeFilme);
+            
+            alert('Avaliação enviada com sucesso!');
+        } else {
+            console.error('Erro do servidor:', resultado);
+            alert('Erro ao enviar avaliação: ' + resultado.erro);
+        }
+    } catch (err) {
+        console.error('Erro de rede:', err);
+        alert('Erro ao enviar avaliação: ' + err.message);
+    }
+}    
+    
+        // ----- Inicializa a página -----
+        carregarFilmes();
+    </script>
+</body>
+
+</html>
