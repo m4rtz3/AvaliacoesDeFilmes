@@ -561,7 +561,3 @@ docker rm nodeapp cassandra
 | POST | `/filmes` | Cadastra novo filme |
 | GET | `/avaliacoes/:id_filme` | Lista avaliações de um filme |
 | POST | `/avaliacoes` | Envia nova avaliação |
-
-## 👨‍💻 Autor
-
-Desenvolvido com ❤️ para aprendizado de Cassandra e Node.js
